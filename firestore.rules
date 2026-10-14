@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ▼ Firebase Console > Authentication 에서 만든 영수증 전용 계정의 UID로 교체
+    function isDevice() { return request.auth != null && request.auth.uid == "REPLACE_WITH_UID"; }
+
+    // 주문 한 줄 검사 (규칙은 반복문이 없어 앞쪽 줄들만 검사)
+    function validLine(l) {
+      return l is map
+        && l.keys().hasOnly(['key','name','price','qty','amount'])
+        && l.keys().hasAll(['key','name','price','qty','amount'])
+        && l.key is int && l.name is string && l.name.size() > 0 && l.name.size() <= 50
+        && l.price is int && l.price > 0 && l.price <= 1000000
+        && l.qty is int && l.qty >= 1 && l.qty <= 999
+        && l.amount is int && l.amount == l.price * l.qty;
+    }
+    function lineOk(items, i) { return items.size() <= i || validLine(items[i]); }
+
+    match /sales/{saleId} {
+      allow get: if isDevice();
+      allow list: if false;
+      allow create: if isDevice()
+        && saleId.matches('^[0-9]{8}-[0-9]{4}-[A-Za-z0-9_-]{1,30}$')
+        && request.resource.data.keys().hasOnly(['sale_id','date','time','receipt_no','device_id','items','total','uid'])
+        && request.resource.data.keys().hasAll(['sale_id','date','time','receipt_no','device_id','items','total','uid'])
+        && request.resource.data.sale_id == saleId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.date is string && request.resource.data.date.size() == 10
+        && request.resource.data.time is string && request.resource.data.time.size() == 8
+        && request.resource.data.receipt_no is int && request.resource.data.receipt_no > 0
+        && request.resource.data.device_id is string && request.resource.data.device_id.size() <= 30
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 50
+        && lineOk(request.resource.data.items, 0) && lineOk(request.resource.data.items, 1)
+        && lineOk(request.resource.data.items, 2) && lineOk(request.resource.data.items, 3)
+        && lineOk(request.resource.data.items, 4)
+        && request.resource.data.total is int && request.resource.data.total > 0
+        && request.resource.data.total <= 50000000;
+      allow update, delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

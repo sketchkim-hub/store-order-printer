@@ -1,0 +1,27 @@
+# 판매/개인 데이터 (원래는 %APPDATA%\FestivalReceipt 에 저장되지만 포터블/개발 시 대비)
+data/
+sales/
+backup/
+preview/
+queue/
+counter.json
+admin.json
+config.json
+menu.csv
+menu.csv.bak_*
+portable.txt
+*.tmp
+*.bad
+# 비밀 정보
+firebase_config.json
+credentials*.json
+*service-account*.json
+.env
+# 빌드 결과
+__pycache__/
+*.pyc
+build/
+dist/
+Output/
+*.spec
+*.zip

@@ -1,0 +1,99 @@
+name: Build Windows exe and installer
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create a Release on tags
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pywin32 keyring pyinstaller
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          cd tests
+          foreach ($t in Get-ChildItem test_*.py) {
+            Write-Host "== $($t.Name)"
+            python $t.Name
+            if ($LASTEXITCODE -ne 0) { throw "Test failed: $($t.Name)" }
+          }
+
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like "refs/tags/v*") { $v = $env:GITHUB_REF_NAME.Substring(1) } else { $v = "0.0.0-dev" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build exe (PyInstaller, onefile)
+        run: >
+          pyinstaller --noconfirm --clean --onefile --noconsole --name FestivalReceipt --icon app.ico
+          --add-data "menu.sample.csv;." --add-data "app.ico;."
+          --hidden-import win32print --hidden-import keyring.backends.Windows
+          receipt.py
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=${{ steps.ver.outputs.version }}" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+
+      - name: Make portable zip
+        shell: pwsh
+        run: |
+          $p = "portable\FestivalReceipt"
+          New-Item -ItemType Directory -Force "$p\data" | Out-Null
+          Copy-Item dist\FestivalReceipt.exe $p
+          Copy-Item docs\사용설명서.pdf $p
+          Copy-Item docs\빠른시작.txt $p
+          Set-Content -Encoding utf8 "$p\data\README.txt" "이 data 폴더가 있으면 포터블 모드: 설정과 판매 기록이 여기에 저장됩니다. 지우지 마세요."
+          Compress-Archive -Path $p -DestinationPath FestivalReceipt-Portable.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FestivalReceipt-${{ steps.ver.outputs.version }}
+          path: |
+            dist/FestivalReceipt.exe
+            Output/FestivalReceipt-Setup.exe
+            FestivalReceipt-Portable.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 매장용 주문 프린터 ${{ github.ref_name }}
+          body: |
+            ## 다운로드
+            - **FestivalReceipt-Setup.exe** : 설치용 (권장). 바탕 화면/시작 메뉴 바로가기가 만들어집니다.
+            - **FestivalReceipt-Portable.zip** : 설치 없이 사용 (USB 등). 압축을 풀고 FestivalReceipt.exe 실행.
+
+            처음 실행 시 "Windows의 PC 보호" 창이 나오면 **추가 정보 → 실행** 을 누르세요.
+            사용법은 함께 들어 있는 사용설명서.pdf 를 보세요.
+          files: |
+            Output/FestivalReceipt-Setup.exe
+            FestivalReceipt-Portable.zip

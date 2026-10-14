@@ -1,0 +1,12 @@
+{
+  "title": "우리 가게",
+  "stall_name": "",
+  "footer": "이용해 주셔서 감사합니다!",
+  "printers": [
+    {"name": "SLK-TS100", "label": "영수증", "mode": "escpos", "layout": "receipt", "paper": 80, "enabled": true},
+    {"name": "라벨 프린터 이름", "label": "라벨", "mode": "gdi", "layout": "label", "paper": "auto", "enabled": false}
+  ],
+  "show_preview": true,
+  "backup_dir": "backup",
+  "device_id": ""
+}

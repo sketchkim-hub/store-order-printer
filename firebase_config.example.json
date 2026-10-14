@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "api_key": "웹 API 키 (프로젝트 설정 > 일반)",
+  "project_id": "my-festival-project",
+  "email": "receipt@example.com",
+  "password": ""
+}
